@@ -19,12 +19,11 @@ Run as a Vector or VectorH 'actian' user with the environment set for Vector/Vec
 
 To install and run:
 
-    1. Download the TPC_DS.zip file and unzip 
-    2. Install unzip e.g. yum -y install unzip 
-    3. unzip TPC_DS.zip 
-    4. cd TPC_DS
-    5. chmod 755 *.sh
-    6. ./TPC_DS_Run.sh 'Data set size in GB'
+    1. Install git e.g. yum -y install git 
+    2. git clone -q --depth=1 https://github.com/ActianCorp/Vector-TPC-DS-Scripts
+    3. cd Vector-TPC-DS-Scripts
+    4. chmod 755 *.sh
+    5. ./TPC_DS_Run.sh 'Data set size in GB'
 
 The only parameter to TPC_DS_Run is the size of the data to be used in the test. 1 = 1Gb, 100 = 100Gb.  This value is used to calculate the total data set size.
     Data Set Size = No. of Nodes x THIS Parameter 
