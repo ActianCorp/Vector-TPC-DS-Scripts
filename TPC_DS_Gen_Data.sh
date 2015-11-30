@@ -35,9 +35,36 @@ GEN_DATA_SCALE=$3
 DATA_DIR=DATA_GENERATED
 
 for table in $(cat ${PWD}/build_data_for_tables.txt); do
+
 	table_name=`echo ${table} | awk -F '|' '{print $1}'`
 
 	${PWD}/dsdgen -table ${table_name} -scale ${GEN_DATA_SCALE} -dir ${PWD}/${DATA_DIR} -parallel ${PARALLEL} -child ${CHILD} -terminate n
+
+    # Move each file produced to HDFS if available
+    # (For vectorH on Hadoop 'normal' file space will be limited)
+    #   - Leave any 'customer' files as they need a character set fix and can't do it in HDFS.
+    #     These files will be fixed and moved to HDFS later.
+
+    if [ -f ${PWD}/${DATA_DIR}/${table_name}_${CHILD}_${PARALLEL}.dat ];then
+
+        if [ "${HDFS_INUSE}" = true -a "${table_name}" != "customer" ]; then
+
+            hdfs dfs -put ${PWD}/${DATA_DIR}/${table_name}_${CHILD}_${PARALLEL}.dat ${HDFS_URL}/${HDFS_DATA_DIR}/.
+            rm -f ${PWD}/${DATA_DIR}/${table_name}_${CHILD}_${PARALLEL}.dat 
+
+            # dsdgen is not called explictly to create returns. These are created alongside
+            # the sales. Hence, unavoidable hard coding here to copy to HDFS.
+            # This relates to catalog_returns, store_returns and web_returns.
+
+            if [ "${table_name}" == "catalog_sales" -o "${table_name}" == "store_sales" -o "${table_name}" == "web_sales" ]; then
+
+                table_name_ret=`echo ${table_name} | sed 's/sales/returns/'`
+                hdfs dfs -put ${PWD}/${DATA_DIR}/${table_name_ret}_${CHILD}_${PARALLEL}.dat ${HDFS_URL}/${HDFS_DATA_DIR}/.
+                rm -f ${PWD}/${DATA_DIR}/${table_name_ret}_${CHILD}_${PARALLEL}.dat 
+
+            fi
+        fi
+    fi
 
 done
 

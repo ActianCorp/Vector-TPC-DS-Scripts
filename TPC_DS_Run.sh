@@ -20,7 +20,8 @@
 
 # This script will Create, Load and Execute a single stream 'TPC-DS Style Benchmark'
 #
-# The script should be run as user 'actian' for Vector and VectorH installations.
+# The script can be run as any user provided it is registered as a Vector/VectorH 
+# user and has sudo access.
 #
 # Parameters
 #     $1 - The size of the data to be used in the test. 1 = 1Gb, 100 = 100Gb.
@@ -45,13 +46,45 @@
 #     Templates updated accordingly:
 #         5,12,16,20,21,32,37,40,77,80,82,92,94,95 and 98
 #
-#
 # The results of the TPC style tests can be found in ${LOGDIR} where this by default
 # is the directory 'LOG_FILES' directly below the install directory. Output in 
 # this directory includes:
 #
 #     1. TPC_DS_Summary_Results.txt   - Summary of the run with run timings.
 #     2. TPC_DS_query'nn'_Results.out - The output from each benchmark SQL run.
+#
+# NOTES:
+#
+# For VectorH installations there is often limited none HDFS file space. As a result
+# HDFS is utilised as this is usually plentiful and addtionally the vwload employed
+# to load the generated data should perform better.
+# Be aware that when generating very large databases, dsdgen still generates the chunks 
+# of the large data files in parrallel so they co-exist in normal file space until they
+# are copied to HDFS (It has not been possible to get dsdgen to create the data files
+# directly in HDFS). As a result it will still be possible to exhaust normal file space.
+#
+# For the generation of larger data sets it is recommended that the no. of threads
+# variable $THREADS be increased from the default of 4 in script TPC_DS_Run.sh.
+#
+# It is recommended that this be run against Vector or VectorH 4.2.2 or above.
+# Specifically for VectorH patch 22101 or above should be applied.
+# Known Problem - Query 14 can hang with earlier versions.
+#
+# The larger tables listed below are first staged then sorted on the hash key before 
+# loading into the final table. The hash key (can be multiple attributes) can be changed
+# by updating file 'sort_data_for_tables.txt'. 
+#     1. catalog_returns
+#     2. catalog_sales
+#     3. customer_demographics
+#     4. inventory
+#     5. store_returns
+#     6. store_sales
+#     7. web_returns
+# It may be neceessary when creating very large databases to make addtional tables
+# partitioned. This requires an appropriate entry in the file above and a change to 
+# the table DDL in 'CREATE_TABLE_DDL' to include the paritioning entry as per any of 
+# tables above.
+#
 
 #-------------------------------------------------------------------------------
 
@@ -63,7 +96,6 @@ echo ""
 
 # Essential control variables
 
-INSTALL_DIR=/home/actian
 TPC_DB=tpc_db
 
 HOSTNAME=`hostname`
@@ -79,6 +111,39 @@ LOG_FILE=${LOG_DIR}/TPC_DS_Summary_Results.txt
 
 GEN_DATA_SCALE=${1}
 GEN_DATA_THREADS=4
+
+set +e
+hdfs dfsadmin -report > /dev/null 2>&1
+if [ $? -eq 127 ]; then
+    HDFS_INUSE=false
+else
+    export HDFS_INUSE=true
+    export HDFS_URL=`hdfs getconf -confkey fs.default.name`
+    export HDFS_DATA_DIR=tmp
+fi
+set -e
+
+# Check user has access to a Vector/VectorH installation and sudo access
+
+set +e
+
+sql iidbdb > /dev/null 2>&1 <<EOF
+\q
+EOF
+
+if [ $? -ne 0 ]; then
+    echo "ERROR on start-up. The user does not appear to have access to a Vector/VectorH installation"
+    exit 9
+fi
+
+sudo -v 2>&1 | grep "Sorry" > /dev/null
+
+if [ $? -eq 0 ]; then
+    echo "ERROR on start-up. The user does not appear to have access to sudo"
+    exit 9
+fi
+
+set -e
 
 # Calculate the no. of parttions to be used for the larger Vector/vectorH Tables.
 
@@ -126,7 +191,7 @@ fi
 #     - Create required sub-directories.
 
 echo ""
-echo "Step 1 - Installing gcc and recode (if not already installed)."
+echo "Step 1 - Initialisation and Setup."
 echo ""
 
 sudo yum -y install gcc
@@ -136,6 +201,12 @@ sudo yum -y install recode
 if [ ! -d ${DATA_DIR} ]; then
     mkdir ${DATA_DIR}
 fi
+
+set +e
+if [ "${HDFS_INUSE}" = true ]; then
+    hdfs dfs -mkdir  ${HDFS_URL}/${HDFS_DATA_DIR}
+fi
+set -e
 
 if [ ! -d ${SQL_DIR} ]; then
     mkdir ${SQL_DIR}
@@ -152,6 +223,9 @@ echo "Step 2 - Tidying up any previous run files etc."
 echo ""
 
 rm -rf rm ${PWD}/${DATA_DIR}/*.dat
+if [ "${HDFS_INUSE}" = true ]; then
+    hdfs dfs -rm -r -f -skipTrash ${HDFS_URL}/${HDFS_DATA_DIR}/*.dat > /dev/null 2>&1
+fi
 rm -rf rm ${PWD}/${SQL_DIR}/*.sql
 
 rm -f ${LOG_DIR}/TPC_DS*.out
@@ -161,7 +235,7 @@ rm -f ${LOG_DIR}/Vector_Load.log
 rm -f ${LOG_FILE}
 
 set +e
-destroydb ${TPC_DB}
+destroydb ${TPC_DB} > /dev/null
 set -e
 
 # 3. Build the dsgen & dsqgen excecutables
@@ -172,7 +246,7 @@ echo ""
 
 cd ${PWD}/${SOURCE_DIR}
 rm -f *.o
-make > dsgen_dsqgen_build.log
+make > dsgen_dsqgen_build.log 2>&1
 
 cp tpcds.idx ${PWD}/../
 cp dsdgen ${PWD}/../
@@ -213,9 +287,15 @@ echo "Step 4/2 - Fixing a character set issue with the customer file."
 echo ""
 
 for data_file in $(ls ${PWD}/${DATA_DIR}/customer_[1-${GEN_DATA_THREADS}]_${GEN_DATA_THREADS}.dat); do
+
     cat ${data_file} | recode iso-8859-1..u8 > ${data_file}.new
-    mv ${data_file} ${data_file}.bak
     mv ${data_file}.new ${data_file}
+
+    if [ "${HDFS_INUSE}" = true ]; then
+        hdfs dfs -put ${data_file} ${HDFS_URL}/${HDFS_DATA_DIR}/.
+        rm -f ${data_file}
+    fi
+
 done
 
 # 5. Generate the SQL from the TPC templates
@@ -242,23 +322,78 @@ echo ""
 
 createdb ${TPC_DB}
 
+optimze_tables=""
+
 for sql_file in $(ls ${PWD}/${TABLE_DIR}/*.sql); do
 
-    # Create table with the appropriate partitions 
     table_name=`echo ${sql_file} | awk -F '.' '{print $2}'`
 
-    echo "Creating and loading table : ${table_name}"
+    # Check if there are any sort keys specified for this table
+    sort_keys=`cat ${PWD}/sort_data_for_tables.txt | grep "${table_name}|" | awk -F '|' '{print $2}'`
 
-    DDL_TO_RUN=`cat ${sql_file} | sed "s/#PARTITIONS#/${PARTITIONS}/"; echo "\g"`
+    # Create the table with the appropriate partitions 
+    #   - May be a staging table if sort keys are specified
+    if [ "${sort_keys}" == "" ]; then
+        echo "Creating and loading table : ${table_name}"
+        DDL_TO_RUN=`cat ${sql_file} | sed "s/#PARTITIONS#/${PARTITIONS}/"; echo "\g"`
+    else
+        echo "Creating and loading staging table : ${table_name}_stage"
+        DDL_TO_RUN=`cat ${sql_file} | sed "s/${table_name}/${table_name}_stage/" | sed "s/#HASHKEYS#/${sort_keys}/" | sed "s/#PARTITIONS#/${PARTITIONS}/"; echo "\g"`
+    fi
 
-    sql -uactian ${TPC_DB} >> ${LOG_DIR}/Vector_Load.log <<EOF
+    sql ${TPC_DB} >> ${LOG_DIR}/Vector_Load.log <<EOF
 ${DDL_TO_RUN}
 EOF
 
+    # Build the load command. This is variable depending on:
+    #   1. Whether sorting is required for large tables.
+    #   2. HDFS is being used for the data source.
+    if [ "${sort_keys}" == "" ]; then
+        load_command="vwload -c -m -stats -z -t ${table_name} ${TPC_DB}"
+    else
+        load_command="vwload -c -m -t ${table_name}_stage ${TPC_DB}"
+        optimize_tables="${optimize_tables}-r${table_name} "
+    fi
+
+    if [ "${HDFS_INUSE}" = true ]; then
+        # Below is to expand hdfs will card list of files as sheel can't do it
+        load_files=`hdfs dfs -ls ${HDFS_URL}/${HDFS_DATA_DIR}/${table_name}_[0-9]*.dat | sed 's/  */ /g' | cut -d\  -f8`
+        load_command=${load_command}" ${load_files}"
+    else
+        load_command=${load_command}" ${PWD}/${DATA_DIR}/${table_name}_[0-9]*.dat"
+    fi
+
     # Populate the table from any available generated data (May not always be?)
-    vwload -m -t ${table_name} -uactian ${TPC_DB} ${PWD}/${DATA_DIR}/${table_name}_[0-9]*.dat >> ${LOG_DIR}/Vector_Load.log
+    ${load_command} >> ${LOG_DIR}/Vector_Load.log
+
+    # For sorted tables now create from the staging table then discard staging
+    if [ "${sort_keys}" != "" ]; then
+        echo "Creating from staging sorted table : ${table_name} (${sort_keys})"
+        sql ${TPC_DB} >> ${LOG_DIR}/Vector_Load.log <<EOF
+CREATE TABLE ${table_name} AS
+SELECT
+    *
+FROM
+    ${table_name}_stage
+ORDER BY
+    ${sort_keys}
+WITH PARTITION = ( HASH ON ${sort_keys} ${PARTITIONS} PARTITIONS );
+\g
+DROP TABLE ${table_name}_stage
+\g
+COMMIT;
+\g
+EOF
+    fi
 
 done
+
+# For sorted table now generate statistics this couldn't be done during the vwload 
+# Currently generated for ALL columns 
+if [ "${optimize_tables}" != "" ]; then
+    echo "Optimising sorted tables"
+    optimizedb ${TPC_DB} ${optimize_tables}
+fi
 
 # 7. Run the TPC SQL
 
@@ -272,13 +407,14 @@ echo ""                                          >> ${LOG_FILE}
 
 for sql_file in $(ls ${PWD}/${SQL_DIR}/*.sql); do
 
+    # Extract the SQL name and no. for the Summary print
     sql_name=`echo ${sql_file} | awk -F 'TPC_SQL_SCRIPTS/' '{print $2}' | awk -F '.' '{print $1}'`
     sql_no=`echo ${sql_file} | awk -F 'TPC_SQL_SCRIPTS/' '{print $2}' | awk -F '.' '{print $1}' | sed 's/Query//'`
 
     echo "Step 6/${sql_no} - Running SQL Test ${sql_name}."
 
     # Note time at start of run
-    if [ "$OSVERSION" == "Linux" ]; then
+    if [ "${OSVERSION}" == "Linux" ]; then
         Start_Time="$(date +%s%N)"
     else
         Start_Time="$(date +%s)"
@@ -287,12 +423,12 @@ for sql_file in $(ls ${PWD}/${SQL_DIR}/*.sql); do
     # Run the SQL
     sql_to_run=`cat ${sql_file}; echo "\g"`
 
-    sql -uactian ${TPC_DB} > ${LOG_DIR}/TPC_DS_${sql_name}_Results.out <<EOF
+    sql ${TPC_DB} > ${LOG_DIR}/TPC_DS_${sql_name}_Results.out <<EOF
 ${sql_to_run}
 EOF
 
     # Time at end of run and hence calculate duration
-    if [ "$OSVERSION" == "Linux" ]; then
+    if [ "${OSVERSION}" == "Linux" ]; then
         Run_Time="$(($(date +%s%N)-${Start_Time}))"
         Run_Secs="$((${Run_Time}/1000000000))"
         Run_Msec="$((${Run_Time}/1000000))"

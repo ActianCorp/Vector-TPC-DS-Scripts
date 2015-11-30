@@ -1,0 +1,7 @@
+catalog_returns|cr_item_sk
+catalog_sales|cs_item_sk
+customer_demographics|cd_demo_sk
+inventory|inv_item_sk
+store_returns|sr_item_sk, sr_ticket_number
+store_sales|ss_item_sk
+web_sales|ws_item_sk

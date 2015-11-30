@@ -15,7 +15,7 @@ Templates updated accordingly:
 
 This README effectively duplicates the documentation in the main script TPC_DS_Run.sh
 
-Run as a Vector or VectorH 'actian' user with the environment set for Vector/VectorH e.g. source.ingVHsh. The user should have the appropriate sudo access to ensure essential packages can be installed.
+The script can be run as any user provided it is registered as a Vector/VectorH user and has sudo access.  The environment should have been set for Vector/VectorH e.g. source.ingVHsh. The user should have the appropriate sudo access to ensure essential packages can be installed.
 
 To install and run:
 
@@ -36,9 +36,30 @@ The results of the TPC style tests can be found in ${LOGDIR} where this by is by
 
 This package has been tested against both Vector and VectorH. 
 
-The script is fully re-runnable from the beginning. 
-To clean up afterwards:
+The script is fully re-runnable from the beginning. To clean up afterwards:
 
     1. rm -fR ~/TPC_DS*
     2. destroydb tpc_db
+
+NOTES:
+
+For VectorH installations there is often limited none HDFS file space. As a result HDFS is utilised as this is usually plentiful and addtionally the vwload employed to load the generated data should perform better.
+Be aware that when generating very large databases, dsdgen still generates the chunks of the large data files in parrallel so they co-exist in normal file space until they are copied to HDFS (It has not been possible to get dsdgen to create the data files directly in HDFS). As a result it will still be possible to exhaust normal file space.
+
+For the generation of larger data sets it is recommended that the no. of threads variable $THREADS be increased from the default of 4 in script TPC_DS_Run.sh.
+
+It is recommended that this be run against Vector or VectorH 4.2.2 or above. Specifically for VectorH patch 22101 or above should be applied.  
+Known Problem - Query 14 can hang with earlier versions.
+
+The larger tables listed below are first staged then sorted on the hash key before loading into the final table. The hash key (can be multiple attributes) can be changed by updating file 'sort_data_for_tables.txt'. 
+
+    1. catalog_returns
+    2. catalog_sales
+    3. customer_demographics
+    4. inventory
+    5. store_returns
+    6. store_sales
+    7. web_returns
+
+It may be neceessary when creating very large databases to make addtional tables partitioned. This requires an appropriate entry in the file above and a change to the table DDL in 'CREATE_TABLE_DDL' to include the paritioning entry as per any of tables above.
 

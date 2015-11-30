@@ -4,4 +4,4 @@ CREATE TABLE inventory (
     inv_warehouse_sk integer NOT NULL,
     inv_quantity_on_hand integer
 )
-WITH PARTITION = (HASH ON inv_item_sk #PARTITIONS# PARTITIONS)
+WITH PARTITION = (HASH ON #HASHKEYS# #PARTITIONS# PARTITIONS)

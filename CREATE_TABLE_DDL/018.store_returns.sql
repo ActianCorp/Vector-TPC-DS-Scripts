@@ -20,4 +20,4 @@ CREATE TABLE store_returns (
     sr_store_credit numeric(7,2),
     sr_net_loss numeric(7,2)
 )
-WITH PARTITION = (HASH ON sr_item_sk, sr_ticket_number #PARTITIONS# PARTITIONS)
+WITH PARTITION = (HASH ON #HASHKEYS# #PARTITIONS# PARTITIONS)
