@@ -79,7 +79,7 @@
 #     4. inventory
 #     5. store_returns
 #     6. store_sales
-#     7. web_returns
+#     7. web_sales  
 # It may be neceessary when creating very large databases to make addtional tables
 # partitioned. This requires an appropriate entry in the file above and a change to 
 # the table DDL in 'CREATE_TABLE_DDL' to include the paritioning entry as per any of 
