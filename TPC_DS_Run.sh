@@ -79,11 +79,9 @@
 #     4. inventory
 #     5. store_returns
 #     6. store_sales
-#     7. web_sales  
+#     7. web_sales   
 # It may be neceessary when creating very large databases to make addtional tables
-# partitioned. This requires an appropriate entry in the file above and a change to 
-# the table DDL in 'CREATE_TABLE_DDL' to include the paritioning entry as per any of 
-# tables above.
+# partitioned. This requires an appropriate sort key entry in the file above.
 #
 
 #-------------------------------------------------------------------------------
@@ -96,18 +94,17 @@ echo ""
 
 # Essential control variables
 
-TPC_DB=tpc_db
+export TPC_DB=tpc_db
 
 HOSTNAME=`hostname`
-OSVERSION=`uname`
 
 SOURCE_DIR=SOURCE_TO_BUILD
 TABLE_DIR=CREATE_TABLE_DDL
 DATA_DIR=DATA_GENERATED
 TEMP_DIR=TPC_SQL_TEMPLATES
-SQL_DIR=TPC_SQL_SCRIPTS
-LOG_DIR=LOG_FILES
-LOG_FILE=${LOG_DIR}/TPC_DS_Summary_Results.txt
+export SQL_DIR=TPC_SQL_SCRIPTS
+export LOG_DIR=LOG_FILES
+export LOG_FILE=${LOG_DIR}/TPC_DS_Summary_Results.txt
 
 GEN_DATA_SCALE=${1}
 GEN_DATA_THREADS=4
@@ -286,7 +283,7 @@ echo ""
 echo "Step 4/2 - Fixing a character set issue with the customer file."
 echo ""
 
-for data_file in $(ls ${PWD}/${DATA_DIR}/customer_[1-${GEN_DATA_THREADS}]_${GEN_DATA_THREADS}.dat); do
+for data_file in $(ls ${PWD}/${DATA_DIR}/customer_[1-9]*.dat); do
 
     cat ${data_file} | recode iso-8859-1..u8 > ${data_file}.new
     mv ${data_file}.new ${data_file}
@@ -331,14 +328,16 @@ for sql_file in $(ls ${PWD}/${TABLE_DIR}/*.sql); do
     # Check if there are any sort keys specified for this table
     sort_keys=`cat ${PWD}/sort_data_for_tables.txt | grep "${table_name}|" | awk -F '|' '{print $2}'`
 
-    # Create the table with the appropriate partitions 
-    #   - May be a staging table if sort keys are specified
+    # Create the table with the appropriate partitions if a sort key is specified.
+    # The sort key is also used to HASH partition on.
+    # For tables not specified for sorting not partitoned. 
     if [ "${sort_keys}" == "" ]; then
         echo "Creating and loading table : ${table_name}"
-        DDL_TO_RUN=`cat ${sql_file} | sed "s/#PARTITIONS#/${PARTITIONS}/"; echo "\g"`
+        DDL_TO_RUN=`cat ${sql_file}; echo "\g"`
     else
         echo "Creating and loading staging table : ${table_name}_stage"
-        DDL_TO_RUN=`cat ${sql_file} | sed "s/${table_name}/${table_name}_stage/" | sed "s/#HASHKEYS#/${sort_keys}/" | sed "s/#PARTITIONS#/${PARTITIONS}/"; echo "\g"`
+        DDL_TO_RUN=`cat ${sql_file} | sed "s/${table_name}/${table_name}_stage/"`
+        DDL_TO_RUN=${DDL_TO_RUN}" WITH PARTITION = ( HASH ON ${sort_keys} ${PARTITIONS} PARTITIONS )"`echo "\g"`
     fi
 
     sql ${TPC_DB} >> ${LOG_DIR}/Vector_Load.log <<EOF
@@ -356,11 +355,11 @@ EOF
     fi
 
     if [ "${HDFS_INUSE}" = true ]; then
-        # Below is to expand hdfs will card list of files as sheel can't do it
-        load_files=`hdfs dfs -ls ${HDFS_URL}/${HDFS_DATA_DIR}/${table_name}_[0-9]*.dat | sed 's/  */ /g' | cut -d\  -f8`
+        # Below is to expand hdfs will card list of files as shell can't do it
+        load_files=`hdfs dfs -ls ${HDFS_URL}/${HDFS_DATA_DIR}/${table_name}_[1-9]*.dat | sed 's/  */ /g' | cut -d\  -f8`
         load_command=${load_command}" ${load_files}"
     else
-        load_command=${load_command}" ${PWD}/${DATA_DIR}/${table_name}_[0-9]*.dat"
+        load_command=${load_command}" ${PWD}/${DATA_DIR}/${table_name}_[1-9]*.dat"
     fi
 
     # Populate the table from any available generated data (May not always be?)
@@ -401,52 +400,7 @@ echo ""
 echo "Step 7 - Running the SQL Tests."
 echo ""
 
-echo "TPC DS Style SQL Performance Test Results" > ${LOG_FILE}
-echo "-----------------------------------------" >> ${LOG_FILE}
-echo ""                                          >> ${LOG_FILE}
-
-for sql_file in $(ls ${PWD}/${SQL_DIR}/*.sql); do
-
-    # Extract the SQL name and no. for the Summary print
-    sql_name=`echo ${sql_file} | awk -F 'TPC_SQL_SCRIPTS/' '{print $2}' | awk -F '.' '{print $1}'`
-    sql_no=`echo ${sql_file} | awk -F 'TPC_SQL_SCRIPTS/' '{print $2}' | awk -F '.' '{print $1}' | sed 's/Query//'`
-
-    echo "Step 6/${sql_no} - Running SQL Test ${sql_name}."
-
-    # Note time at start of run
-    if [ "${OSVERSION}" == "Linux" ]; then
-        Start_Time="$(date +%s%N)"
-    else
-        Start_Time="$(date +%s)"
-    fi
-
-    # Run the SQL
-    sql_to_run=`cat ${sql_file}; echo "\g"`
-
-    sql ${TPC_DB} > ${LOG_DIR}/TPC_DS_${sql_name}_Results.out <<EOF
-${sql_to_run}
-EOF
-
-    # Time at end of run and hence calculate duration
-    if [ "${OSVERSION}" == "Linux" ]; then
-        Run_Time="$(($(date +%s%N)-${Start_Time}))"
-        Run_Secs="$((${Run_Time}/1000000000))"
-        Run_Msec="$((${Run_Time}/1000000))"
-    else
-        #must be OSX which doesn't have nano-seconds
-        Run_Time="$(($(date +%s)-${Start_Time}))"
-        Run_Secs=${Run_Time}
-        Run_Msec=0
-    fi
-
-    # Log the results - run time or FAILED
-    if [ `grep "^E_US" ${LOG_DIR}/TPC_DS_${sql_name}_Results.out | wc -l` -gt 0 ]; then
-        printf "${sql_name} FAILED\n" >> ${LOG_FILE}
-    else
-        printf "${sql_name} run time is : %02d:%02d:%02d.%03d\n" "$((${Run_Secs}/3600%24))" "$((${Run_Secs}/60%60))" "$((${Run_Secs}%60))" "${Run_Msec}" >> ${LOG_FILE}
-    fi
-
-done
+${PWD}/TPC_DS_Run_Tests_Only.sh
 
 echo ""
 echo "TPC-DS Style Benchmark run completed successfully"

@@ -9,4 +9,3 @@ CREATE TABLE customer_demographics (
     cd_dep_employed_count integer,
     cd_dep_college_count integer
 )
-WITH PARTITION = (HASH ON #HASHKEYS# #PARTITIONS# PARTITIONS)

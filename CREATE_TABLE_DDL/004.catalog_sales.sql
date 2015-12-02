@@ -34,4 +34,3 @@ CREATE TABLE catalog_sales (
     cs_net_paid_inc_ship_tax numeric(7,2),
     cs_net_profit numeric(7,2)
 )
-WITH PARTITION = (HASH ON #HASHKEYS# #PARTITIONS# PARTITIONS)

@@ -23,4 +23,3 @@ CREATE TABLE store_sales (
     ss_net_paid_inc_tax numeric(7,2),
     ss_net_profit numeric(7,2)
 )
-WITH PARTITION = (HASH ON #HASHKEYS# #PARTITIONS# PARTITIONS)

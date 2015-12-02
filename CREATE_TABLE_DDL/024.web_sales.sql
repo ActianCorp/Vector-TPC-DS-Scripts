@@ -34,4 +34,3 @@ CREATE TABLE web_sales (
     ws_net_paid_inc_ship_tax numeric(7,2),
     ws_net_profit numeric(7,2)
 )
-WITH PARTITION = (HASH ON #HASHKEYS# #PARTITIONS# PARTITIONS)

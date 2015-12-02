@@ -1,5 +1,7 @@
 This collection of scripts and files will Create, Load and Execute a single stream 'TPC-DS Style Benchmark'
 
+It has been tested against Vector 4.2.2 (CentOS 6.7) and VectorH 4.2.1 (CentOS 6.4). 
+
 PLEASE NOTE 
 
 This is not intended to represent an official TPC benchmark. 
@@ -34,7 +36,11 @@ The results of the TPC style tests can be found in ${LOGDIR} where this by is by
     1. TPC_DS_Summary_Results.txt   - Summary of the run with run timings.
     2. TPC_DS_query'nn'_Results.out - The output from each benchmark SQL run.
 
-This package has been tested against both Vector and VectorH. 
+The TPC tests can be run separately. This will allow peformance modifications to be made to the data
+without the incurring the overhead of re-generating the data which can be time intensive. To run the test only:
+
+    1. cd Vector-TPC-DS-Scripts
+    2. ./TPC_DS_Run_Tests_Only.sh
 
 The script is fully re-runnable from the beginning. To clean up afterwards:
 
@@ -61,5 +67,5 @@ The larger tables listed below are first staged then sorted on the hash key befo
     6. store_sales
     7. web_sales
 
-It may be neceessary when creating very large databases to make addtional tables partitioned. This requires an appropriate entry in the file above and a change to the table DDL in 'CREATE_TABLE_DDL' to include the paritioning entry as per any of tables above.
+It may be neceessary when creating very large databases to make addtional tables partitioned. This requires an appropriate entry in the file above.
 

@@ -27,4 +27,3 @@ CREATE TABLE catalog_returns (
     cr_store_credit numeric(7,2),
     cr_net_loss numeric(7,2)
 )
-WITH PARTITION = (HASH ON #HASHKEYS# #PARTITIONS# PARTITIONS)
