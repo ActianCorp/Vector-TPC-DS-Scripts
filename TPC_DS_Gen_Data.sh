@@ -24,21 +24,22 @@
 # Parameters
 #     $1 - No. of parallel threads to use creating the data
 #     $2 - Child thread no. 
-#     $3 - The size of the data to be generated in Gigabytes e.g. 1 = 1Gb
+#     $3 - Scale Factor - The size of the data to be generated in Gigabytes 
+#          e.g. 1 = 1Gb
 
 #-------------------------------------------------------------------------------
 
 set -e
 PARALLEL=$1
 CHILD=$2
-GEN_DATA_SCALE=$3
+SCALE_FACTOR=$3
 DATA_DIR=DATA_GENERATED
 
 for table in $(cat ${PWD}/build_data_for_tables.txt); do
 
 	table_name=`echo ${table} | awk -F '|' '{print $1}'`
 
-	${PWD}/dsdgen -table ${table_name} -scale ${GEN_DATA_SCALE} -dir ${PWD}/${DATA_DIR} -parallel ${PARALLEL} -child ${CHILD} -terminate n
+	${PWD}/dsdgen -table ${table_name} -scale ${SCALE_FACTOR} -dir ${PWD}/${DATA_DIR} -parallel ${PARALLEL} -child ${CHILD} -terminate n
 
     # Move each file produced to HDFS if available
     # (For vectorH on Hadoop 'normal' file space will be limited)
@@ -68,7 +69,7 @@ for table in $(cat ${PWD}/build_data_for_tables.txt); do
 
 done
 
-echo "COMPLETE: dsdgen parallel ${PARALLEL} child ${CHILD} scale ${GEN_DATA_SCALE}"
+echo "COMPLETE: dsdgen parallel ${PARALLEL} child ${CHILD} scale ${SCALE_FACTOR}"
 
 #------------------------------------------------------------------------------#
 #---------------------------- End of Shell Script -----------------------------#

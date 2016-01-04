@@ -1,5 +1,5 @@
 CREATE TABLE customer_demographics (
-    cd_demo_sk integer NOT NULL,
+    cd_demo_sk bigint NOT NULL,
     cd_gender character(1),
     cd_marital_status character(1),
     cd_education_status character(20),

@@ -1,5 +1,5 @@
 CREATE TABLE web_site (
-    web_site_sk integer NOT NULL,
+    web_site_sk bigint NOT NULL,
     web_site_id character(16) NOT NULL,
     web_rec_start_date date,
     web_rec_end_date date,

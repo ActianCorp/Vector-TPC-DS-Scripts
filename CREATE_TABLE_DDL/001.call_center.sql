@@ -1,5 +1,5 @@
 CREATE TABLE call_center (
-    cc_call_center_sk integer,
+    cc_call_center_sk bigint,
     cc_call_center_id character(16),
     cc_rec_start_date date,
     cc_rec_end_date text,

@@ -1,5 +1,5 @@
 CREATE TABLE item (
-    i_item_sk integer NOT NULL,
+    i_item_sk bigint NOT NULL,
     i_item_id character(16) NOT NULL,
     i_rec_start_date date,
     i_rec_end_date date,

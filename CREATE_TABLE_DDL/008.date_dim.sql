@@ -1,5 +1,5 @@
 CREATE TABLE date_dim (
-    d_date_sk integer NOT NULL,
+    d_date_sk bigint NOT NULL,
     d_date_id character(16) NOT NULL,
     d_date date,
     d_month_seq integer,

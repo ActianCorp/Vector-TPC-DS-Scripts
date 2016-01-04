@@ -1,5 +1,5 @@
 CREATE TABLE time_dim (
-    t_time_sk integer NOT NULL,
+    t_time_sk bigint NOT NULL,
     t_time_id character(16) NOT NULL,
     t_time integer,
     t_hour integer,

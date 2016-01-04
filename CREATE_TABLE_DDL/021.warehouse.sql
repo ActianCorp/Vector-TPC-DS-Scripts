@@ -1,5 +1,5 @@
 CREATE TABLE warehouse (
-    w_warehouse_sk integer NOT NULL,
+    w_warehouse_sk bigint NOT NULL,
     w_warehouse_id character(16) NOT NULL,
     w_warehouse_name character varying(20),
     w_warehouse_sq_ft integer,

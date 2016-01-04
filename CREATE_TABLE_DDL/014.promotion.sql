@@ -1,9 +1,9 @@
 CREATE TABLE promotion (
-    p_promo_sk integer NOT NULL,
+    p_promo_sk bigint NOT NULL,
     p_promo_id character(16) NOT NULL,
-    p_start_date_sk integer,
-    p_end_date_sk integer,
-    p_item_sk integer,
+    p_start_date_sk bigint,
+    p_end_date_sk bigint,
+    p_item_sk bigint,
     p_cost numeric(15,2),
     p_response_target integer,
     p_promo_name character(50),

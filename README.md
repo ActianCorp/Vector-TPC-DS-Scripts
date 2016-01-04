@@ -27,9 +27,14 @@ To install and run:
     4. chmod 755 *.sh
     5. ./TPC_DS_Run.sh 'Data set size in GB'
 
-The only parameter to TPC_DS_Run is the size of the data to be used in the test. 1 = 1Gb, 100 = 100Gb.  This value is used to calculate the total data set size.
-    Data Set Size = No. of Nodes x THIS Parameter 
-If this parameter is not passed the default is to generate 1Gb per node. For Vector the No. of Nodes is always 1.
+The are 2 parameters to TPC_DS_Run:
+
+    1. $1 - Scale Factor. The size of the data to be used in the test. 1 = 1Gb, 100 = 100Gb.
+            If this parameter is not passed the default is to generate 1Gb per node.
+            For Vector the No. of Nodes is always 1.
+    2. $2 - Data Generation Threads. The no. of threads to be used for data generation.
+            Default = 4.
+            TPC provide no recommendation as to optimum threads but a decent rule of thumb is CPUs * COREs / 2
 
 The results of the TPC style tests can be found in ${LOGDIR} where this by is by default the directory 'LOG_FILES' directly below the install directory. Output in this directory includes:
 

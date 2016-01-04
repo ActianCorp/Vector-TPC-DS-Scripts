@@ -1,5 +1,5 @@
 CREATE TABLE store (
-    s_store_sk integer NOT NULL,
+    s_store_sk bigint NOT NULL,
     s_store_id character(16) NOT NULL,
     s_rec_start_date date,
     s_rec_end_date date,

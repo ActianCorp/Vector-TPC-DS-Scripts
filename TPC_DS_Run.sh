@@ -24,23 +24,26 @@
 # user and has sudo access.
 #
 # Parameters
-#     $1 - The size of the data to be used in the test. 1 = 1Gb, 100 = 100Gb.
-#          This value is used to calculate the total data set size 
-#              Data Set Size = No. of Nodes x THIS Parameter 
+#     $1 - Scale Factor. The size of the data to be used in the test. 1 = 1Gb, 100 = 100Gb.
 #          If this parameter is not passed the default is to generate 1Gb per node.
 #          For Vector the No. of Nodes is always 1.
-#
+#     $2 - Data Generation Threads. The no. of threads to be used for data generation.
+#          Default = 4.
+#          TPC provide no recommendation as to optimum threads but a decent rule of 
+#          thumb is CPUs * COREs / 2
 #
 # PLEASE NOTE 
 #
 #     This is not intended to represent an official TPC benchmark. 
 #
-#     It does however correctly use dsdgen and dsqgen to generate the data and 
-#     TPC DS benchmark SQL from the TPC templates. 
+#     It is derived from TPC-DS 1.4.0 correctly use dsdgen and dsqgen to generate the 
+#     data and the the TPC DS benchmark SQL from the TPC templates. 
 #     It is simply intended as a useful tool for Vector/VectorH performance evaluation.
+#     The results are NOT comparable with any published results.
 #
 #     Only minor modfications where required to the TPC Template SQL. This was in 
-#     relation to SQL statements where a number of days are added.
+#     relation to SQL statements where a number of days are added in the context of 
+#     the BETWEEN statement.
 #     For these statements in Vector/VectorH quotes must be added but this in no 
 #     way affects the itegrity of the SQL. e.g. 30 days --> '30 days'
 #     Templates updated accordingly:
@@ -106,8 +109,8 @@ export SQL_DIR=TPC_SQL_SCRIPTS
 export LOG_DIR=LOG_FILES
 export LOG_FILE=${LOG_DIR}/TPC_DS_Summary_Results.txt
 
-GEN_DATA_SCALE=${1}
-GEN_DATA_THREADS=4
+SCALE_FACTOR=${1}
+GEN_DATA_THREADS=${2}
 
 set +e
 hdfs dfsadmin -report > /dev/null 2>&1
@@ -167,18 +170,28 @@ set -e
 
 # Parameter Validation
 
-if [ "${GEN_DATA_SCALE}" == "" ]; then
-    GEN_DATA_SCALE=${NODES}
+if [ "${SCALE_FACTOR}" == "" ]; then
+    SCALE_FACTOR=${NODES}
 
     echo ""
-    echo "No data set size passed as parameter 1."
-    echo "Generated data set calculated as 1 Gb / Node = ${GEN_DATA_SCALE}Gb."
+    echo "No scale factor passed as parameter 1."
+    echo "Generated scale factor calculated as 1 Gb / Node = ${SCALE_FACTOR}Gb."
     echo ""
 else
-    GEN_DATA_SCALE=`expr ${NODES} "*" ${1}`
+    echo ""
+    echo "Scale factor used = ${SCALE_FACTOR}Gb."
+    echo ""
+fi
+
+if [ "${GEN_DATA_THREADS}" == "" ]; then
+    GEN_DATA_THREADS=4
 
     echo ""
-    echo "Generated date set calculated as ${1} Gb / Node = ${GEN_DATA_SCALE}Gb."
+    echo "No. of threads for data generation defaulted to ${GEN_DATA_THREADS}."
+    echo ""
+else
+    echo ""
+    echo "No. of threads for data generation is ${GEN_DATA_THREADS}."
     echo ""
 fi
 
@@ -266,7 +279,7 @@ done
 
 # Launch a data generator for each of the parallel threads required 
 for thread_no in $(seq 1 ${GEN_DATA_THREADS}); do
-    nohup ${PWD}/TPC_DS_Gen_Data.sh ${GEN_DATA_THREADS} ${thread_no} ${GEN_DATA_SCALE} > ${LOG_DIR}/TPC_DS_Gen_Data${thread_no}.log 2>&1 < ${LOG_DIR}/TPC_DS_Gen_Data${thread_no}.log &
+    nohup ${PWD}/TPC_DS_Gen_Data.sh ${GEN_DATA_THREADS} ${thread_no} ${SCALE_FACTOR} > ${LOG_DIR}/TPC_DS_Gen_Data${thread_no}.log 2>&1 < ${LOG_DIR}/TPC_DS_Gen_Data${thread_no}.log &
 done
 
 # Monitor the progress of the data generation threads and continue when ALL complete
@@ -305,7 +318,7 @@ for template_file in $(cat ${PWD}/${TEMP_DIR}/templates.lst); do
 
     template_name=`echo ${template_file} | awk -F '.' '{print $1}'`
 
-    ./dsqgen -template ${template_file} -directory ${TEMP_DIR} -output ${SQL_DIR} -dialect vector -scale ${GEN_DATA_SCALE} -quiet Y
+    ./dsqgen -template ${template_file} -directory ${TEMP_DIR} -output ${SQL_DIR} -dialect vector -scale ${SCALE_FACTOR} -quiet Y
 
     mv ${SQL_DIR}/query_0.sql ${SQL_DIR}/${template_name}.sql
 

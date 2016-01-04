@@ -1,5 +1,5 @@
 CREATE TABLE customer_address (
-    ca_address_sk integer NOT NULL,
+    ca_address_sk bigint NOT NULL,
     ca_address_id character(16) NOT NULL,
     ca_street_number character(10),
     ca_street_name character varying(60),
