@@ -35,6 +35,9 @@ The are 2 parameters to TPC_DS_Run:
     2. $2 - Data Generation Threads. The no. of threads to be used for data generation.
             Default = 4.
             TPC provide no recommendation as to optimum threads but a decent rule of thumb is CPUs * COREs / 2
+    3. $3 - Data Directory. Override the directory used for transient data files.
+            Default = 'TPC DS Installation Dir'/DATA_GENERATED.
+            Allows the specification of a directory in a file system with adequate space when generating large data volumes.
 
 The results of the TPC style tests can be found in ${LOGDIR} where this by is by default the directory 'LOG_FILES' directly below the install directory. Output in this directory includes:
 

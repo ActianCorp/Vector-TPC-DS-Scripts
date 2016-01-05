@@ -31,6 +31,10 @@
 #          Default = 4.
 #          TPC provide no recommendation as to optimum threads but a decent rule of 
 #          thumb is CPUs * COREs / 2
+#     $3 - Data Directory. Override the directory used for transient data files.
+#          Default = 'TPC DS Installation Dir'/DATA_GENERATED.
+#          Allows the specification of a directory in a file system with adequate space
+#          when generating large data volumes.
 #
 # PLEASE NOTE 
 #
@@ -103,7 +107,6 @@ HOSTNAME=`hostname`
 
 SOURCE_DIR=SOURCE_TO_BUILD
 TABLE_DIR=CREATE_TABLE_DDL
-DATA_DIR=DATA_GENERATED
 TEMP_DIR=TPC_SQL_TEMPLATES
 export SQL_DIR=TPC_SQL_SCRIPTS
 export LOG_DIR=LOG_FILES
@@ -111,6 +114,7 @@ export LOG_FILE=${LOG_DIR}/TPC_DS_Summary_Results.txt
 
 SCALE_FACTOR=${1}
 GEN_DATA_THREADS=${2}
+DATA_DIR=${3}
 
 set +e
 hdfs dfsadmin -report > /dev/null 2>&1
@@ -195,6 +199,19 @@ else
     echo ""
 fi
 
+if [ "${DATA_DIR}" == "" ]; then
+    DATA_DIR=${PWD}/DATA_GENERATED
+
+    echo ""
+    echo "Data location default used of ${DATA_DIR}."
+    echo ""
+else
+    echo ""
+    echo "Data location overridden to be ${DATA_DIR}."
+    echo ""
+fi
+
+export DATA_DIR
 
 # 1. Initialisation
 #     - Install gcc, git and recode if not already installed.
@@ -232,7 +249,7 @@ echo ""
 echo "Step 2 - Tidying up any previous run files etc."
 echo ""
 
-rm -rf rm ${PWD}/${DATA_DIR}/*.dat
+rm -rf rm ${DATA_DIR}/*.dat
 if [ "${HDFS_INUSE}" = true ]; then
     hdfs dfs -rm -r -f -skipTrash ${HDFS_URL}/${HDFS_DATA_DIR}/*.dat > /dev/null 2>&1
 fi
@@ -296,7 +313,7 @@ echo ""
 echo "Step 4/2 - Fixing a character set issue with the customer file."
 echo ""
 
-for data_file in $(ls ${PWD}/${DATA_DIR}/customer_[1-9]*.dat); do
+for data_file in $(ls ${DATA_DIR}/customer_[1-9]*.dat); do
 
     cat ${data_file} | recode iso-8859-1..u8 > ${data_file}.new
     mv ${data_file}.new ${data_file}
@@ -346,7 +363,8 @@ for sql_file in $(ls ${PWD}/${TABLE_DIR}/*.sql); do
     # For tables not specified for sorting not partitoned. 
     if [ "${sort_keys}" == "" ]; then
         echo "Creating and loading table : ${table_name}"
-        DDL_TO_RUN=`cat ${sql_file}; echo "\g"`
+        # WITH NOPATITION explicity stated in case Vector config parameter set to default partitions.
+        DDL_TO_RUN=`cat ${sql_file}; echo " WITH NOPARTITION \g"`
     else
         echo "Creating and loading staging table : ${table_name}_stage"
         DDL_TO_RUN=`cat ${sql_file} | sed "s/${table_name}/${table_name}_stage/"`
@@ -372,11 +390,19 @@ EOF
         load_files=`hdfs dfs -ls ${HDFS_URL}/${HDFS_DATA_DIR}/${table_name}_[1-9]*.dat | sed 's/  */ /g' | cut -d\  -f8`
         load_command=${load_command}" ${load_files}"
     else
-        load_command=${load_command}" ${PWD}/${DATA_DIR}/${table_name}_[1-9]*.dat"
+        load_command=${load_command}" ${DATA_DIR}/${table_name}_[1-9]*.dat"
     fi
 
     # Populate the table from any available generated data (May not always be?)
     ${load_command} >> ${LOG_DIR}/Vector_Load.log
+
+    # Tidy up the transient load files to re-claim disk space as early as possible
+
+    if [ "${HDFS_INUSE}" = true ]; then
+        hdfs dfs -rm -r -f -skipTrash ${HDFS_URL}/${HDFS_DATA_DIR}/${table_name}_[1-9]*.dat > /dev/null 2>&1
+    else
+        rm -f ${DATA_DIR}/${table_name}_[1-9]*.dat
+    fi
 
     # For sorted tables now create from the staging table then discard staging
     if [ "${sort_keys}" != "" ]; then
