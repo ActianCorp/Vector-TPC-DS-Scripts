@@ -24,13 +24,15 @@
 # user and has sudo access.
 #
 # Parameters
-#     $1 - Scale Factor. The size of the data to be used in the test. 1 = 1Gb, 100 = 100Gb.
+#
+#     $1 - Scale Factor. The total size of the data to be used in the test. 
+#              e.g. 1 = 1Gb, 100 = 100Gb, 1000 = 1Tb.
 #          If this parameter is not passed the default is to generate 1Gb per node.
 #          For Vector the No. of Nodes is always 1.
 #     $2 - Data Generation Threads. The no. of threads to be used for data generation.
 #          Default = 4.
 #          TPC provide no recommendation as to optimum threads but a decent rule of 
-#          thumb is CPUs * COREs / 2
+#          thumb is CPUs * COREs / 2 (On the master node for loading NOT for all nodes)
 #     $3 - Data Directory. Override the directory used for transient data files.
 #          Default = 'TPC DS Installation Dir'/DATA_GENERATED.
 #          Allows the specification of a directory in a file system with adequate space
@@ -40,18 +42,25 @@
 #
 #     This is not intended to represent an official TPC benchmark. 
 #
-#     It is derived from TPC-DS 1.4.0 correctly use dsdgen and dsqgen to generate the 
-#     data and the the TPC DS benchmark SQL from the TPC templates. 
+#     It is derived from TPC-DS 2.1.0 to use dsdgen and dsqgen to generate the 
+#     data and the TPC DS benchmark SQL from the TPC templates. 
 #     It is simply intended as a useful tool for Vector/VectorH performance evaluation.
 #     The results are NOT comparable with any published results.
 #
-#     Only minor modfications where required to the TPC Template SQL. This was in 
-#     relation to SQL statements where a number of days are added in the context of 
-#     the BETWEEN statement.
-#     For these statements in Vector/VectorH quotes must be added but this in no 
-#     way affects the itegrity of the SQL. e.g. 30 days --> '30 days'
-#     Templates updated accordingly:
-#         5,12,16,20,21,32,37,40,77,80,82,92,94,95 and 98
+#     Some minor modfications where required to the TPC Template SQL but these do not affect
+#     the integrity of the tests: 
+#
+#         Firstly, This was in relation to SQL statements where a number of days are
+#         added in the context of the BETWEEN statement. 
+#         For these statements in Vector/VectorH quotes must be added. 
+#             e.g. 30 days --> '30 days'
+#         Templates updated accordingly:
+#             5,12,16,20,21,32,37,40,77,80,82,92,94,95 and 98.
+#
+#         Secondly, some redundant bracketing and correlations names were removed at
+#         TPC 2.1 and had to be added back in.
+#         Templates updated accordingly:
+#             2,14 and 23.
 #
 # The results of the TPC style tests can be found in ${LOGDIR} where this by default
 # is the directory 'LOG_FILES' directly below the install directory. Output in 
@@ -59,6 +68,7 @@
 #
 #     1. TPC_DS_Summary_Results.txt   - Summary of the run with run timings.
 #     2. TPC_DS_query'nn'_Results.out - The output from each benchmark SQL run.
+#     3. More detailed log output if errors are encountered.
 #
 # NOTES:
 #
@@ -71,11 +81,11 @@
 # directly in HDFS). As a result it will still be possible to exhaust normal file space.
 #
 # For the generation of larger data sets it is recommended that the no. of threads
-# variable $THREADS be increased from the default of 4 in script TPC_DS_Run.sh.
+# be increased from the default of 4 in script TPC_DS_Run.sh with parameter 2.
 #
 # It is recommended that this be run against Vector or VectorH 4.2.2 or above.
 # Specifically for VectorH patch 22101 or above should be applied.
-# Known Problem - Query 14 can hang with earlier versions.
+#     Known Problem - Query 14 can hang with earlier versions.
 #
 # The larger tables listed below are first staged then sorted on the hash key before 
 # loading into the final table. The hash key (can be multiple attributes) can be changed
@@ -221,10 +231,6 @@ echo ""
 echo "Step 1 - Initialisation and Setup."
 echo ""
 
-sudo yum -y install gcc
-
-sudo yum -y install recode
-
 if [ ! -d ${DATA_DIR} ]; then
     mkdir ${DATA_DIR}
 fi
@@ -242,6 +248,8 @@ fi
 if [ ! -d ${LOG_DIR} ]; then
     mkdir ${LOG_DIR}
 fi
+
+sudo yum -y install gcc recode flex > ${LOG_DIR}/Step_1_yum_install.log 2>&1
 
 # 2. Tidy up any previous run
 
@@ -273,7 +281,7 @@ echo ""
 
 cd ${PWD}/${SOURCE_DIR}
 rm -f *.o
-make > dsgen_dsqgen_build.log 2>&1
+make > ../${LOG_DIR}/Step_2_dsgen_dsqgen_build.log 2>&1
 
 cp tpcds.idx ${PWD}/../
 cp dsdgen ${PWD}/../
@@ -371,7 +379,7 @@ for sql_file in $(ls ${PWD}/${TABLE_DIR}/*.sql); do
         DDL_TO_RUN=${DDL_TO_RUN}" WITH PARTITION = ( HASH ON ${sort_keys} ${PARTITIONS} PARTITIONS )"`echo "\g"`
     fi
 
-    sql ${TPC_DB} >> ${LOG_DIR}/Vector_Load.log <<EOF
+    sql ${TPC_DB} >> ${LOG_DIR}/Step_6_vector_load.log <<EOF
 ${DDL_TO_RUN}
 EOF
 
@@ -394,7 +402,7 @@ EOF
     fi
 
     # Populate the table from any available generated data (May not always be?)
-    ${load_command} >> ${LOG_DIR}/Vector_Load.log
+    ${load_command} >> ${LOG_DIR}/Step_6_vector_load.log
 
     # Tidy up the transient load files to re-claim disk space as early as possible
 
@@ -407,7 +415,7 @@ EOF
     # For sorted tables now create from the staging table then discard staging
     if [ "${sort_keys}" != "" ]; then
         echo "Creating from staging sorted table : ${table_name} (${sort_keys})"
-        sql ${TPC_DB} >> ${LOG_DIR}/Vector_Load.log <<EOF
+        sql ${TPC_DB} >> ${LOG_DIR}/Step_6_vector_load.log <<EOF
 CREATE TABLE ${table_name} AS
 SELECT
     *
